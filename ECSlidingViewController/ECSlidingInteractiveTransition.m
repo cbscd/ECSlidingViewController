@@ -29,6 +29,8 @@
 @property (nonatomic, assign) CGFloat fullWidth;
 @property (nonatomic, assign) CGFloat currentPercentage;
 @property (nonatomic, copy) void (^coordinatorInteractionEnded)(id<UIViewControllerTransitionCoordinatorContext>context);
+@property (nonatomic, assign) CGRect initialTopViewFrame;
+
 @end
 
 @implementation ECSlidingInteractiveTransition
@@ -62,13 +64,17 @@
 #pragma mark - UIPanGestureRecognizer action
 
 - (void)updateTopViewHorizontalCenterWithRecognizer:(UIPanGestureRecognizer *)recognizer {
+    UIView *topView       = self.slidingViewController.topViewController.view;
     CGFloat translationX  = [recognizer translationInView:self.slidingViewController.view].x;
     CGFloat velocityX     = [recognizer velocityInView:self.slidingViewController.view].x;
-
+    
     switch (recognizer.state) {
         case UIGestureRecognizerStateBegan: {
             BOOL isMovingRight = velocityX > 0;
-
+            
+            CALayer *presentationLayer = (CALayer *)topView.layer.presentationLayer;
+            self.initialTopViewFrame = presentationLayer.frame;
+            
             if (self.slidingViewController.currentTopViewPosition == ECSlidingViewControllerTopViewPositionCentered && isMovingRight) {
                 [self.slidingViewController anchorTopViewToRightAnimated:YES];
             } else if (self.slidingViewController.currentTopViewPosition == ECSlidingViewControllerTopViewPositionCentered && !isMovingRight) {
@@ -92,16 +98,23 @@
         case UIGestureRecognizerStateCancelled: {
             BOOL isPanningRight = velocityX > 0;
             
-            if (self.coordinatorInteractionEnded) self.coordinatorInteractionEnded((id<UIViewControllerTransitionCoordinatorContext>)self.slidingViewController);
+            if (self.coordinatorInteractionEnded)
+                self.coordinatorInteractionEnded((id<UIViewControllerTransitionCoordinatorContext>)self.slidingViewController);
             
-            if (isPanningRight && self.positiveLeftToRight) {
+            BOOL shouldAnchorToSide = (abs(translationX) > (self.fullWidth / 2.5)) || abs(velocityX) > 100;
+            
+            if (isPanningRight && self.positiveLeftToRight && shouldAnchorToSide) {
                 [self finishInteractiveTransition];
-            } else if (isPanningRight && !self.positiveLeftToRight) {
+            } else if (isPanningRight && !self.positiveLeftToRight && !shouldAnchorToSide) {
                 [self cancelInteractiveTransition];
-            } else if (!isPanningRight && self.positiveLeftToRight) {
+            } else if (!isPanningRight && self.positiveLeftToRight && !shouldAnchorToSide) {
                 [self cancelInteractiveTransition];
-            } else if (!isPanningRight && !self.positiveLeftToRight) {
+            } else if (!isPanningRight && !self.positiveLeftToRight && shouldAnchorToSide) {
                 [self finishInteractiveTransition];
+            } else if (shouldAnchorToSide) {
+                [self finishInteractiveTransition];
+            } else if (!shouldAnchorToSide) {
+                [self cancelInteractiveTransition];
             }
             
             break;
